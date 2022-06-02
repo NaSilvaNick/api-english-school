@@ -1,9 +1,27 @@
-const { Pessoas, Matriculas } = require('../models')
+const { Pessoas, Matriculas, sequelize } = require('../models')
+const { literal } = require('sequelize')
+const { PessoasServices } = require('../services')
 
 class PessoaController {
+
+    static pessoasServices = new PessoasServices()
+
+    static async pegaPessoasAtivas(req,res){
+        try {
+            const todasAtivas = await PessoaController
+                                        .pessoasServices
+                                        .pegaRegistosAtivos()
+            return res.status(200).json(todasAtivas)
+        } catch (error) {
+            return res.status(500).json(error.message)
+        }
+    }
+
     static async pegaTodasAsPessoas(req,res){
         try {
-            const todasAsPessoas = await Pessoas.findAll()
+            const todasAsPessoas = await PessoaController
+                                        .pessoasServices
+                                        .pegaTodosOsRegistos()
             return res.status(200).json(todasAsPessoas)
         } catch (error) {
             return res.status(500).json(error.message)
@@ -51,6 +69,16 @@ class PessoaController {
             const { id } = req.params
             await Pessoas.destroy({ where: { id: Number(id) } })
             return res.status(200).json({ message: `id ${id} deletado` })
+        } catch (error) {
+            return res.status(500).json(error.message)
+        }
+    }
+
+    static async restauraPessoa(req,res){
+        try {
+            const { id } = req.params
+            await Pessoas.restore({ where: { id: Number(id) } })
+            return res.status(200).json({ message: `id ${id} restaurado` })
         } catch (error) {
             return res.status(500).json(error.message)
         }
@@ -118,6 +146,65 @@ class PessoaController {
                 }
             })
             return res.status(200).json({ message: `id ${matriculaId} de matricula, do estudante de id = ${estudanteId} deletado` })
+        } catch (error) {
+            return res.status(500).json(error.message)
+        }
+    }
+
+    static async pegaMatriculas(req,res){
+        try {
+            const { estudanteId } = req.params
+            const pessoa = await Pessoas.findOne({where: { id: Number(estudanteId)}})
+            const matriculas = await pessoa.getAulasMatriculadas()
+            console.log(`\n${matriculas}\n`)
+            return res.status(200).json(matriculas)
+        } catch (error) {
+            return res.status(500).json(error.message)
+        }
+    }
+
+    static async pegaMatriculasPorTurma(req,res){
+        try {
+            const { turmaId } = req.params
+            const todasAsMatriculas = await Matriculas.findAndCountAll({
+                where: {
+                    turma_id: Number(turmaId),
+                    status: "confirmado"
+                },
+                limit: 20,
+                order: [['estudante_id', 'ASC']]
+            })
+            return res.status(200).json(todasAsMatriculas)
+        } catch (error) {
+            return res.status(500).json(error.message)
+        }
+    }
+
+    static async pegaTurmasLotadas(req,res){
+        try {
+            const lotacaoTurma = 2
+            const turmasLotadas = await Matriculas.findAndCountAll({
+                where: {
+                    status: 'confirmado'
+                },
+                attributes: ['turma_id'],
+                group: ['turma_id'],
+                having: literal(`count(turma_id) >= ${lotacaoTurma}`)
+            })
+            return res.status(200).json(turmasLotadas.count)
+
+
+        } catch (error) {
+            return res.status(500).json(error.message)
+        }
+    }
+
+    static async cancelaPessoa(req,res){
+        try {
+            const { estudanteId } = req.params
+            
+            await PessoaController.pessoasServices.cancelaPessoasEMatriculas(Number(estudanteId))
+            return res.status(200).json({ message: `matriculas referente ao estudante ${estudanteId} canceladas`})
         } catch (error) {
             return res.status(500).json(error.message)
         }
